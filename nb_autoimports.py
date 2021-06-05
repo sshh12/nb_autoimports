@@ -13,7 +13,11 @@ AUTO_IMPORT_LINE = "# autoimport"
 
 def build_index_from_import_name(import_name):
     # TODO: cache
-    path = __import__(import_name).__path__[0]
+    module = __import__(import_name)
+    try:
+        path = module.__path__[0]
+    except AttributeError:
+        path = os.path.dirname(module.__file__)
     index = {}
     for fn in glob.iglob(os.path.join(path, "**", "*.py"), recursive=True):
         with open(fn, "r") as f:
@@ -136,7 +140,7 @@ class AutoImporter:
     def on_autoimport_cell(self, cell_text):
         self.options = parse_opts(cell_text)
         import_names = cell_text.split(":", 1)[1].split("\n")[0].split(",")
-        import_names = [n.strip() for n in import_names]
+        import_names = [n.strip() for n in import_names if n != ""]
         for import_name in import_names:
             if import_name in self.indexes:
                 continue
@@ -154,6 +158,8 @@ class AutoImporter:
         if name_match is None:
             return
         name = name_match.group(1)
+        if name not in cell_text:
+            return
         return self.on_name_error(name, cell_id)
 
 
