@@ -1,3 +1,5 @@
+from functools import cmp_to_key
+import logging
 import glob
 import json
 import re
@@ -6,10 +8,11 @@ import os
 from IPython.display import Javascript, display
 from common_index import COMMON_IMPORTS, COMMON_ALIASES
 
-AUTO_IMPORT_LINE = "# autoimport: "
+AUTO_IMPORT_LINE = "# autoimport"
 
 
 def build_index_from_import_name(import_name):
+    # TODO: cache
     path = __import__(import_name).__path__[0]
     index = {}
     for fn in glob.iglob(os.path.join(path, "**", "*.py"), recursive=True):
@@ -49,15 +52,53 @@ def set_cell(original_cell, new_cell, cell_id):
     display(Javascript(js_code))
 
 
+def run_cells(cell_ids):
+    js_code = """
+        setTimeout(function() {{
+            var nbb_cell_ids = {};
+            var nbb_cells = Jupyter.notebook.get_cells();
+            var run_cells = nbb_cell_ids.map(cell_id => {{
+                var cell = nbb_cells.findIndex(nb_cell => nb_cell.input_prompt_number == cell_id);
+                return cell;
+            }});
+            console.log(run_cells);
+            Jupyter.notebook.execute_cells(run_cells);
+        }}, 500);
+    """.format(
+        json.dumps(cell_ids)
+    )
+    display(Javascript(js_code))
+
+
 def coalesce_import_lines(lines):
     # TODO: fancy merging
-    return sorted(set(lines))
+    def _sort_cmp(a, b):
+        a_import = a.startswith("import ")
+        b_import = b.startswith("import ")
+        if a_import != b_import:
+            return int(b_import) - int(a_import)
+        return a > b
+
+    return sorted(set(lines), key=cmp_to_key(_sort_cmp))
+
+
+def parse_opts(cell_text):
+    opts = cell_text.replace(AUTO_IMPORT_LINE, "").split(":", 1)[0]
+    if opts == "":
+        return []
+    opts = [o.strip() for o in opts[1:-1].split(",")]
+    return opts
 
 
 class AutoImporter:
     def __init__(self, ip):
         self.ip = ip
+        self.options = {}
+        # mappings from modules to top level func/class names
         self.indexes = COMMON_IMPORTS.copy()
+        # mappings from names to what the import statement looks like
+        # ... basically just a fallback if the import doesn't fit
+        # the index format.
         self.aliases = COMMON_ALIASES.copy()
 
     def lookup_name(self, name):
@@ -67,11 +108,12 @@ class AutoImporter:
         for aliases in self.aliases.values():
             if name in aliases:
                 return aliases[name], "alias"
-        return None
+        return None, None
 
-    def on_name_error(self, name):
+    def on_name_error(self, name, cell_id):
         import_text, mode = self.lookup_name(name)
         if import_text is None:
+            logging.warning('[autoimport] Name "{}" was not found in index.'.format(name))
             return
         cells = self.ip.user_ns["In"]
         imports_cell, imports_cell_id = None, -1
@@ -88,21 +130,23 @@ class AutoImporter:
             lines.append(import_text)
         lines[1:] = coalesce_import_lines(lines[1:])
         set_cell(imports_cell, "\n".join(lines), imports_cell_id)
+        if "rerun" in self.options:
+            run_cells([imports_cell_id, cell_id])
 
-    def on_autoimport_cell(self, cell_id, cell_text):
-        import_names = cell_text.replace(AUTO_IMPORT_LINE, "").split("\n")[0].split(",")
+    def on_autoimport_cell(self, cell_text):
+        self.options = parse_opts(cell_text)
+        import_names = cell_text.split(":", 1)[1].split("\n")[0].split(",")
         import_names = [n.strip() for n in import_names]
         for import_name in import_names:
             if import_name in self.indexes:
                 continue
             self.indexes[import_name] = build_index_from_import_name(import_name)
-        print(self.indexes)
 
     def on_post_run_cell(self, exec_result):
         cell_id = len(self.ip.user_ns["In"]) - 1
         cell_text = self.ip.user_ns["_i" + str(cell_id)]
         if cell_text.startswith(AUTO_IMPORT_LINE):
-            return self.on_autoimport_cell(cell_id, cell_text)
+            return self.on_autoimport_cell(cell_text)
         err = exec_result.error_in_exec
         if err is None or type(err) != NameError:
             return
@@ -110,9 +154,10 @@ class AutoImporter:
         if name_match is None:
             return
         name = name_match.group(1)
-        return self.on_name_error(name)
+        return self.on_name_error(name, cell_id)
 
 
 def load_ipython_extension(ip):
+    # TODO: unload function
     ai = AutoImporter(ip)
     ip.events.register("post_run_cell", ai.on_post_run_cell)
