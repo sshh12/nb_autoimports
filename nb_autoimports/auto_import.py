@@ -81,14 +81,10 @@ def run_cells(cell_ids):
 
 def coalesce_import_lines(lines):
     # TODO: fancy merging
-    def _sort_cmp(a, b):
-        a_import = a.startswith("import ")
-        b_import = b.startswith("import ")
-        if a_import != b_import:
-            return int(b_import) - int(a_import)
-        return a > b
-
-    return sorted(set(lines), key=cmp_to_key(_sort_cmp))
+    lines = set(lines)
+    lines_with_import = [line for line in lines if line.startswith("import ")]
+    lines_without_import = [line for line in lines if line not in lines_with_import]
+    return sorted(lines_with_import) + sorted(lines_without_import)
 
 
 def parse_opts(cell_text):
