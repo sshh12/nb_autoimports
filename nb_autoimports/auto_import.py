@@ -25,7 +25,7 @@ def build_index_from_import_name(import_name):
         path = os.path.dirname(module.__file__)
     index = {}
     for fn in glob.iglob(os.path.join(path, "**", "*.py"), recursive=True):
-        with open(fn, "r") as f:
+        with open(fn, "r", encoding="utf-8") as f:
             text = f.read()
         func_names = re.findall(r"[\n\r]def (\S+)\(", text)
         class_names = re.findall(r"[\n\r]class (\S+?)[\(:]", text)
