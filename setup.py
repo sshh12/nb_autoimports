@@ -1,25 +1,21 @@
-import os
-from setuptools import setup
+import setuptools
 
 
-def get_readme():
-    with open("README.md", "r") as f:
-        return f.read()
+with open("README.md", "r") as f:
+    long_description = f.read()
 
 
-setup(
+setuptools.setup(
     name="nb_autoimports",
-    version="0.0.1",
+    version="0.0.2",
     description="Automatically add imports when a notebook raises a NameError.",
-    long_description=get_readme(),
+    long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/sshh12/nb_autoimports",
     author="Shrivu Shanakr",
     author_email="shrivu1122@gmail.com",
     license="MIT",
-    py_modules=["nb_autoimports"],
-    zip_safe=False,
-    install_requires=[],
+    packages=setuptools.find_packages(),
     classifiers=[
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
