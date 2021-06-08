@@ -10,7 +10,7 @@ Load with `%load_ext nb_autoimports` and create a cell with just `# autoimport:`
 
 ### Fix basic imports
 
-_See [common_index.py](https://github.com/sshh12/nb_autoimports/blob/main/common_index.py) for built-in aliases._
+_See [common_index.py](https://github.com/sshh12/nb_autoimports/blob/main/nb_autoimports/common_index.py) for built-in aliases._
 
 ![basic example](https://user-images.githubusercontent.com/6625384/120899493-a0c73000-c5f5-11eb-8888-7f7ecb3b8870.gif)
 
@@ -26,4 +26,4 @@ _Include import names as a comma separated list. The order listed will be used a
 
 ## More built-in imports
 
-Fill free to PR an update [common_index.py](https://github.com/sshh12/nb_autoimports/blob/main/common_index.py).
+Fill free to PR an update [common_index.py](https://github.com/sshh12/nb_autoimports/blob/main/nb_autoimports/common_index.py).

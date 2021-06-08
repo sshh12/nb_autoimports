@@ -9,8 +9,8 @@ def get_readme():
 
 setup(
     name="nb_autoimports",
-    version="0.0.0",
-    description="TODO.",
+    version="0.0.1",
+    description="Automatically add imports when a notebook raises a NameError.",
     long_description=get_readme(),
     long_description_content_type="text/markdown",
     url="https://github.com/sshh12/nb_autoimports",

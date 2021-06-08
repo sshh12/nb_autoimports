@@ -1,14 +1,19 @@
 from functools import cmp_to_key
-import logging
 import glob
 import json
 import re
 import os
 
 from IPython.display import Javascript, display
-from common_index import COMMON_IMPORTS, COMMON_ALIASES
+from .common_index import COMMON_IMPORTS, COMMON_ALIASES
 
 AUTO_IMPORT_LINE = "# autoimport"
+
+
+class Options:
+    QUIET = "quiet"
+    IGNORE_PRIVATE = "ignoreprivate"
+    RERUN = "rerun"
 
 
 def build_index_from_import_name(import_name):
@@ -90,14 +95,14 @@ def parse_opts(cell_text):
     opts = cell_text.replace(AUTO_IMPORT_LINE, "").split(":", 1)[0]
     if opts == "":
         return []
-    opts = [o.strip() for o in opts[1:-1].split(",")]
+    opts = [o.strip().lower().replace("_", "") for o in opts[1:-1].split(",")]
     return opts
 
 
 class AutoImporter:
     def __init__(self, ip):
         self.ip = ip
-        self.options = {}
+        self.options = []
         # mappings from modules to top level func/class names
         self.indexes = COMMON_IMPORTS.copy()
         # mappings from names to what the import statement looks like
@@ -106,6 +111,8 @@ class AutoImporter:
         self.aliases = COMMON_ALIASES.copy()
 
     def lookup_name(self, name):
+        if name.startswith("_") and Options.IGNORE_PRIVATE in self.options:
+            return None, None
         for index in self.indexes.values():
             if name in index:
                 return index[name], "import"
@@ -117,7 +124,8 @@ class AutoImporter:
     def on_name_error(self, name, cell_id):
         import_text, mode = self.lookup_name(name)
         if import_text is None:
-            logging.warning('[autoimport] Name "{}" was not found in index.'.format(name))
+            if Options.QUIET not in self.options:
+                print('[autoimport] Name "{}" was not found in index.'.format(name))
             return
         cells = self.ip.user_ns["In"]
         imports_cell, imports_cell_id = None, -1
@@ -132,9 +140,11 @@ class AutoImporter:
             lines.append("from " + import_text + " import " + name)
         else:
             lines.append(import_text)
-        lines[1:] = coalesce_import_lines(lines[1:])
+        if "(" not in import_text:
+            # "(" means imports were edited...dont want to deal with that.
+            lines[1:] = coalesce_import_lines(lines[1:])
         set_cell(imports_cell, "\n".join(lines), imports_cell_id)
-        if "rerun" in self.options:
+        if Options.RERUN in self.options:
             run_cells([imports_cell_id, cell_id])
 
     def on_autoimport_cell(self, cell_text):
@@ -145,6 +155,13 @@ class AutoImporter:
             if import_name in self.indexes:
                 continue
             self.indexes[import_name] = build_index_from_import_name(import_name)
+        total_imports = sum(len(imps) for imps in self.indexes.values())
+        if Options.QUIET not in self.options:
+            print(
+                "[autoimport] Loaded {} modules, {} aliases, {} imports. Using options {}.".format(
+                    len(self.indexes), len(self.aliases), total_imports, self.options
+                )
+            )
 
     def on_post_run_cell(self, exec_result):
         cell_id = len(self.ip.user_ns["In"]) - 1
@@ -161,9 +178,3 @@ class AutoImporter:
         if name not in cell_text:
             return
         return self.on_name_error(name, cell_id)
-
-
-def load_ipython_extension(ip):
-    # TODO: unload function
-    ai = AutoImporter(ip)
-    ip.events.register("post_run_cell", ai.on_post_run_cell)
